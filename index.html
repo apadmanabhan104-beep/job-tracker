@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Design tokens ───────────────────────── */
+    :root {
+      --bg:        #f5f3ee;
+      --surface:   #ffffff;
+      --border:    #e0ddd6;
+      --text:      #1a1916;
+      --muted:     #8a8780;
+      --accent:    #1a1916;
+
+      --applied:       #dbeafe; --applied-text:       #1e3a5f;
+      --interviewing:  #fef3c7; --interviewing-text:  #78350f;
+      --offer:         #dcfce7; --offer-text:         #14532d;
+      --rejected:      #fee2e2; --rejected-text:      #7f1d1d;
+      --withdrawn:     #f1f0eb; --withdrawn-text:     #57534e;
+
+      --radius: 6px;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    /* ── Reset ───────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Layout ──────────────────────────────── */
+    html, body { height: 100%; }
+    #layout {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    #body-row {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Header ──────────────────────────────── */
+    #header {
+      padding: 28px 32px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    #header h1 {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    #header .tagline {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    #api-key-wrap {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #api-key-wrap label { font-size: 12px; color: var(--muted); }
+    #api-key-input {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      width: 220px;
+      outline: none;
+    }
+    #api-key-input:focus { border-color: var(--accent); }
+
+    /* ── Main (table area) ───────────────────── */
+    #main {
+      flex: 1;
+      padding: 24px 32px;
+      overflow-y: auto;
+      min-width: 0;
+    }
+
+    /* ── Stats row ───────────────────────────── */
+    #stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      flex: 1;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 500;
+    }
+
+    /* ── Table ───────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    tbody tr:hover { background: #faf9f7; }
+    tbody tr:last-child { border-bottom: none; }
+    td {
+      padding: 11px 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .col-company { width: 20%; font-weight: 500; }
+    .col-role    { width: 25%; }
+    .col-status  { width: 16%; }
+    .col-date    { width: 14%; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .col-notes   { width: 25%; color: var(--muted); font-size: 13px; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-applied      { background: var(--applied);      color: var(--applied-text); }
+    .badge-interviewing { background: var(--interviewing);  color: var(--interviewing-text); }
+    .badge-offer        { background: var(--offer);         color: var(--offer-text); }
+    .badge-rejected     { background: var(--rejected);      color: var(--rejected-text); }
+    .badge-withdrawn    { background: var(--withdrawn);     color: var(--withdrawn-text); }
+
+    .empty-row td {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Sidebar (chat) ──────────────────────── */
+    #sidebar {
+      width: 360px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 600px;
+    }
+    #sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .msg {
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      max-width: 90%;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .msg.thinking {
+      color: var(--muted);
+      font-style: italic;
+      border-style: dashed;
+    }
+    #input-area {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    #user-input {
+      flex: 1;
+      resize: none;
+      font-family: var(--font-body);
+      font-size: 13px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    #user-input:focus { border-color: var(--accent); }
+    #send-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-body);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    #send-btn:hover   { opacity: 0.8; }
+    #send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Hints ───────────────────────────────── */
+    #hints {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    #hints p { font-size: 11px; color: var(--muted); }
+    #hints strong { color: var(--text); font-weight: 500; }
+  </style>
+</head>
+<body>
+
+<div id="layout">
+
+  <!-- Header -->
+  <header id="header">
+    <h1>job-tracker</h1>
+    <span class="tagline">AI-powered application tracker</span>
+    <div id="api-key-wrap">
+      <label for="api-key-input">Anthropic API key</label>
+      <input id="api-key-input" type="password" placeholder="sk-ant-..." autocomplete="off" />
+    </div>
+  </header>
+
+  <!-- Body row -->
+  <div id="body-row">
+
+  <!-- Main table area -->
+  <main id="main">
+    <div id="stats">
+      <div class="stat"><div class="stat-label">Total</div><div class="stat-value" id="s-total">0</div></div>
+      <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value" id="s-interview">0</div></div>
+      <div class="stat"><div class="stat-label">Offers</div><div class="stat-value" id="s-offer">0</div></div>
+      <div class="stat"><div class="stat-label">Rejected</div><div class="stat-value" id="s-rejected">0</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-company">Company</th>
+            <th class="col-role">Role</th>
+            <th class="col-status">Status</th>
+            <th class="col-date">Applied</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="app-tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Sidebar chat -->
+  <aside id="sidebar">
+    <div id="sidebar-header">Assistant</div>
+    <div id="messages">
+      <div class="msg assistant">
+        Hi! Tell me about a job you applied for and I'll track it. You can also update statuses, add notes, or ask for a summary.
+      </div>
+    </div>
+    <div id="hints">
+      <p><strong>Try:</strong> "Add Atlassian, Senior Designer, applied today"</p>
+      <p>"Update Atlassian to interviewing"</p>
+      <p>"Show me a summary"</p>
+    </div>
+    <div id="input-area">
+      <textarea id="user-input" rows="1" placeholder="Type a message…"></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+  </aside>
+
+  </div><!-- end body-row -->
+
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  // Load saved applications from localStorage, or start with an empty array.
+  // localStorage.getItem() returns null if nothing is saved yet.
+  let apps = JSON.parse(localStorage.getItem('job-tracker-apps') || '[]');
+  let chatHistory = [];
+
+  const STATUSES = ['applied', 'interviewing', 'offer', 'rejected', 'withdrawn'];
+
+  // ── Persist ────────────────────────────────────────────────────────────────
+  // Every time apps changes, save it so it survives page refresh.
+  function save() {
+    localStorage.setItem('job-tracker-apps', JSON.stringify(apps));
+  }
+
+  // ── Render table ───────────────────────────────────────────────────────────
+  function render() {
+    const tbody = document.getElementById('app-tbody');
+
+    if (apps.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No applications yet — add one using the assistant →</td></tr>';
+    } else {
+      tbody.innerHTML = apps.map(a => `
+        <tr>
+          <td class="col-company">${esc(a.company)}</td>
+          <td class="col-role">${esc(a.role)}</td>
+          <td class="col-status"><span class="badge badge-${a.status}">${a.status}</span></td>
+          <td class="col-date">${fmtDate(a.date)}</td>
+          <td class="col-notes" title="${esc(a.notes || '')}">${esc(a.notes || '—')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Update stat cards
+    document.getElementById('s-total').textContent    = apps.length;
+    document.getElementById('s-interview').textContent = apps.filter(a => a.status === 'interviewing').length;
+    document.getElementById('s-offer').textContent     = apps.filter(a => a.status === 'offer').length;
+    document.getElementById('s-rejected').textContent  = apps.filter(a => a.status === 'rejected').length;
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Escape HTML to prevent XSS (always sanitise user-provided strings before
+  // inserting into innerHTML — good habit to build early).
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+
+  // Fuzzy company name match — "google" matches "Google DeepMind"
+  function findApp(name) {
+    const q = name.toLowerCase();
+    return apps.findIndex(a =>
+      a.company.toLowerCase().includes(q) || q.includes(a.company.toLowerCase())
+    );
+  }
+
+  // ── Apply AI action to data ────────────────────────────────────────────────
+  // The AI returns a structured JSON action; this function acts on it.
+  function applyAction(action) {
+    const today = new Date().toISOString().split('T')[0];
+
+    if (action.action === 'add' && action.data) {
+      const d = action.data;
+      apps.push({
+        company: d.company || 'Unknown',
+        role:    d.role    || 'Unknown',
+        status:  STATUSES.includes(d.status) ? d.status : 'applied',
+        date:    d.date    || today,
+        notes:   d.notes   || ''
+      });
+
+    } else if (action.action === 'update' && action.data) {
+      const d   = action.data;
+      const idx = findApp(d.company);
+      if (idx > -1) {
+        const f = d.field, v = d.value;
+        if      (f === 'status' && STATUSES.includes(v)) apps[idx].status = v;
+        else if (f === 'notes')  apps[idx].notes  = v;
+        else if (f === 'role')   apps[idx].role   = v;
+        else if (f === 'date')   apps[idx].date   = v;
+      }
+
+    } else if (action.action === 'delete' && action.data) {
+      const idx = findApp(action.data.company);
+      if (idx > -1) apps.splice(idx, 1);
+    }
+
+    save();   // persist after every change
+    render(); // re-draw the table
+  }
+
+  // ── Chat UI helpers ────────────────────────────────────────────────────────
+  function addMsg(role, text, thinking = false) {
+    const msgs = document.getElementById('messages');
+    const div  = document.createElement('div');
+    div.className = `msg ${role}${thinking ? ' thinking' : ''}`;
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }
+
+  // ── Send a message ─────────────────────────────────────────────────────────
+  async function sendMsg() {
+    const input  = document.getElementById('user-input');
+    const apiKey = document.getElementById('api-key-input').value.trim();
+    const text   = input.value.trim();
+
+    if (!text) return;
+
+    if (!apiKey) {
+      addMsg('assistant', 'Please enter your Anthropic API key in the top-right corner first.');
+      return;
+    }
+
+    input.value = '';
+    input.style.height = 'auto';
+    document.getElementById('send-btn').disabled = true;
+
+    addMsg('user', text);
+    chatHistory.push({ role: 'user', content: text });
+
+    const thinkEl = addMsg('assistant', 'Thinking…', true);
+
+    // ── System prompt ────────────────────────────────────────────────────────
+    // This tells the AI what role to play and what format to respond in.
+    // We inject the current apps list into every user message so the AI
+    // always has the latest data (the API is stateless — it has no memory).
+    const systemPrompt = `You are a job application tracker assistant. Always respond with ONLY valid JSON — no prose, no markdown.
+
+JSON format:
+{
+  "action": "add" | "update" | "delete" | "summary" | "none",
+  "data": { ... },
+  "message": "short friendly confirmation to show the user"
+}
+
+Actions:
+- "add":    data = { company, role, status (default "applied"), date (ISO string, default today: ${new Date().toISOString().split('T')[0]}), notes (optional) }
+- "update": data = { company, field ("status"|"notes"|"role"|"date"), value }
+- "delete": data = { company }
+- "summary": data = {} — give a useful summary in the message field
+- "none":   data = {} — ask for clarification in the message field
+
+Valid status values: applied, interviewing, offer, rejected, withdrawn.
+Match company names fuzzily. Be brief and friendly in the message field.`;
+
+    // Inject the current apps list into the latest user message
+    const appsContext = `\n\nCurrent applications:\n${JSON.stringify(apps, null, 2)}`;
+    const messages = chatHistory.map((m, i) =>
+      i === chatHistory.length - 1 && m.role === 'user'
+        ? { role: 'user', content: m.content + appsContext }
+        : m
+    );
+
+    // ── Call Anthropic API ───────────────────────────────────────────────────
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: messages
+        })
+      });
+
+      const data = await response.json();
+      thinkEl.remove();
+
+      if (data.content && data.content[0]) {
+        // Strip any accidental markdown code fences before parsing
+        let raw = data.content[0].text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          parsed = { action: 'none', message: raw };
+        }
+
+        applyAction(parsed);
+
+        const reply = parsed.message || 'Done!';
+        chatHistory.push({ role: 'assistant', content: reply });
+        addMsg('assistant', reply);
+
+      } else if (data.error) {
+        addMsg('assistant', `API error: ${data.error.message}`);
+      } else {
+        addMsg('assistant', 'Something went wrong. Please try again.');
+      }
+
+    } catch (err) {
+      thinkEl.remove();
+      addMsg('assistant', `Network error: ${err.message}`);
+    }
+
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
+  }
+
+  // ── Event listeners ────────────────────────────────────────────────────────
+  document.getElementById('send-btn').addEventListener('click', sendMsg);
+
+  document.getElementById('user-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  });
+
+  document.getElementById('user-input').addEventListener('input', e => autoResize(e.target));
+
+  // Save API key to localStorage so it persists between sessions
+  document.getElementById('api-key-input').addEventListener('input', e => {
+    localStorage.setItem('job-tracker-api-key', e.target.value);
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  // Restore saved API key on load
+  const savedKey = localStorage.getItem('job-tracker-api-key');
+  if (savedKey) document.getElementById('api-key-input').value = savedKey;
+
+  render(); // draw table with any saved data
+</script>
+
+</body>
+</html>
