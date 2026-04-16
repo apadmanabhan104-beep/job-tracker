@@ -295,6 +295,7 @@
 
   <!-- Main table area -->
   <main id="main">
+    <input id="search" type="text" placeholder="Search applications..." style="width:100%;padding:9px 12px;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-body);font-size:13px;background:var(--surface);color:var(--text);outline:none;" />
     <div id="stats">
       <div class="stat"><div class="stat-label">Total</div><div class="stat-value" id="s-total">0</div></div>
       <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value" id="s-interview">0</div></div>
@@ -358,28 +359,34 @@
 
   // ── Render table ───────────────────────────────────────────────────────────
   function render() {
-    const tbody = document.getElementById('app-tbody');
+  const query = (document.getElementById('search')?.value || '').toLowerCase();
+  const filtered = apps.filter(a =>
+    a.company.toLowerCase().includes(query) ||
+    a.role.toLowerCase().includes(query) ||
+    a.status.toLowerCase().includes(query) ||
+    (a.notes || '').toLowerCase().includes(query)
+  );
 
-    if (apps.length === 0) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No applications yet — add one using the assistant →</td></tr>';
-    } else {
-      tbody.innerHTML = apps.map(a => `
-        <tr>
-          <td class="col-company">${esc(a.company)}</td>
-          <td class="col-role">${esc(a.role)}</td>
-          <td class="col-status"><span class="badge badge-${a.status}">${a.status}</span></td>
-          <td class="col-date">${fmtDate(a.date)}</td>
-          <td class="col-notes" title="${esc(a.notes || '')}">${esc(a.notes || '—')}</td>
-        </tr>
-      `).join('');
-    }
-
-    // Update stat cards
-    document.getElementById('s-total').textContent    = apps.length;
-    document.getElementById('s-interview').textContent = apps.filter(a => a.status === 'interviewing').length;
-    document.getElementById('s-offer').textContent     = apps.filter(a => a.status === 'offer').length;
-    document.getElementById('s-rejected').textContent  = apps.filter(a => a.status === 'rejected').length;
+  const tbody = document.getElementById('app-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">' + (query ? 'No results for "' + query + '"' : 'No applications yet — add one using the assistant →') + '</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(a => `
+      <tr>
+        <td class="col-company">${esc(a.company)}</td>
+        <td class="col-role">${esc(a.role)}</td>
+        <td class="col-status"><span class="badge badge-${a.status}">${a.status}</span></td>
+        <td class="col-date">${fmtDate(a.date)}</td>
+        <td class="col-notes" title="${esc(a.notes || '')}">${esc(a.notes || '—')}</td>
+      </tr>
+    `).join('');
   }
+
+  document.getElementById('s-total').textContent     = apps.length;
+  document.getElementById('s-interview').textContent = apps.filter(a => a.status === 'interviewing').length;
+  document.getElementById('s-offer').textContent     = apps.filter(a => a.status === 'offer').length;
+  document.getElementById('s-rejected').textContent  = apps.filter(a => a.status === 'rejected').length;
+}
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   // Escape HTML to prevent XSS (always sanitise user-provided strings before
@@ -575,6 +582,8 @@ Match company names fuzzily. Be brief and friendly in the message field.`;
   document.getElementById('api-key-input').addEventListener('input', e => {
     localStorage.setItem('job-tracker-api-key', e.target.value);
   });
+
+  document.getElementById('search').addEventListener('input', render);
 
   // ── Init ───────────────────────────────────────────────────────────────────
   // Restore saved API key on load
