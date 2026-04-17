@@ -189,7 +189,9 @@
       border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      min-height: 600px;
+      position: sticky;
+      top: 0;
+      max-height: 100vh;
     }
     #sidebar-header {
       padding: 16px 20px;
@@ -201,7 +203,7 @@
       letter-spacing: 0.06em;
     }
     #messages {
-      flex: 1;
+      flex: 280px;
       overflow-y: auto;
       padding: 16px 20px;
       display: flex;
