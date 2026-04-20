@@ -341,6 +341,7 @@
     <div id="input-area">
       <textarea id="user-input" rows="1" placeholder="Type a message…"></textarea>
       <button id="send-btn">Send</button>
+      <button id="mic-btn" onclick="toggleMic()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;">🎤</button>
     </div>
   </aside>
 
@@ -484,6 +485,64 @@
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 100) + 'px';
   }
+
+  let recognition = null;
+let isListening = false;
+
+//speech recognition
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Sorry, your browser does not support speech recognition. Try Chrome.');
+    return;
+  }
+
+  if (isListening) {
+    recognition.stop();
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-AU';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  const btn = document.getElementById('mic-btn');
+  const input = document.getElementById('user-input');
+
+  recognition.onstart = () => {
+    isListening = true;
+    btn.textContent = '⏹';
+    btn.style.borderColor = '#ef4444';
+    btn.style.color = '#ef4444';
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = Array.from(event.results)
+      .map(r => r[0].transcript)
+      .join('');
+    input.value = transcript;
+    autoResize(input);
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    btn.textContent = '🎤';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    if (input.value.trim()) sendMsg();
+  };
+
+  recognition.onerror = (e) => {
+    isListening = false;
+    btn.textContent = '🎤';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    alert('Microphone error: ' + e.error);
+  };
+
+  recognition.start();
+}
 
   // ── Send a message ─────────────────────────────────────────────────────────
   async function sendMsg() {
