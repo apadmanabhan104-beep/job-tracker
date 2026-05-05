@@ -279,6 +279,7 @@
     }
     #hints p { font-size: 11px; color: var(--muted); }
     #hints strong { color: var(--text); font-weight: 500; }
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -356,7 +357,7 @@
   // localStorage.getItem() returns null if nothing is saved yet.
 
   const SUPABASE_URL = 'https://evprintqvuznakthbrni.supabase.co';
-const SUPABASE_KEY = 'your-anon-key-here';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2cHJpbnRxdnV6bmFrdGhicm5pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MzE4NjIsImV4cCI6MjA5MzQwNzg2Mn0.6ljU_dJNcyor1Er9uo6A-OxL1VJRQC8kDFv4-rl2ypU';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let apps = [];
