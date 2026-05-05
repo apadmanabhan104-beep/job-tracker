@@ -407,7 +407,7 @@ async function loadApps() {
     a.role.toLowerCase().includes(query) ||
     a.status.toLowerCase().includes(query) ||
     (a.notes || '').toLowerCase().includes(query) ||
-    (a.followup || null).toLowerCase().includes(query)
+    (a.followup || '').toLowerCase().includes(query)
   );
 
   const tbody = document.getElementById('app-tbody');
