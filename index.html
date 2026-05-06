@@ -280,6 +280,7 @@
     #hints p { font-size: 11px; color: var(--muted); }
     #hints strong { color: var(--text); font-weight: 500; }
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -303,6 +304,10 @@
   <!-- Main table area -->
   <main id="main">
     <input id="search" type="text" placeholder="Search applications by company, role, status, or notes..." style="width:100%;padding:9px 12px;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-body);font-size:13px;background:var(--surface);color:var(--text);outline:none;" />
+    <div id="sync-row" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+      <button id="sync-btn" onclick="syncGmail()" style="padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;">⟳ Sync Gmail</button>
+      <span id="sync-status" style="font-size:12px;color:var(--muted);"></span>
+    </div>
     <div id="stats">
       <div class="stat"><div class="stat-label">Total</div><div class="stat-value" id="s-total">0</div></div>
       <div class="stat"><div class="stat-label">Interviewing</div><div class="stat-value" id="s-interview">0</div></div>
@@ -324,6 +329,10 @@
         </thead>
         <tbody id="app-tbody"></tbody>
       </table>
+      <div id="review-panel" style="display:none;margin-top:24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">New applications found in Gmail — review before adding</div>
+        <div id="review-items"></div>
+      </div>
     </div>
   </main>
 
@@ -568,6 +577,207 @@ function toggleMic() {
   };
 
   recognition.start();
+}
+
+const GOOGLE_CLIENT_ID = '522138545793-e53d5npgebo86hoj2b3gs6f2lim9hf4s.apps.googleusercontent.com';
+let googleToken = null;
+
+function syncGmail() {
+  const status = document.getElementById('sync-status');
+
+  if (typeof google === 'undefined') {
+    status.textContent = 'Google API still loading, please try again in a moment...';
+    setTimeout(syncGmail, 1000); // retry after 1 second
+    return;
+  }
+
+  status.textContent = 'Connecting to Google...';
+
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    callback: async (response) => {
+      if (response.error) {
+        status.textContent = 'Google sign-in failed: ' + response.error;
+        return;
+      }
+      googleToken = response.access_token;
+      await fetchEmails();
+    }
+  });
+
+  client.requestAccessToken();
+}
+
+async function fetchEmails() {
+  const status = document.getElementById('sync-status');
+  status.textContent = 'Fetching emails...';
+
+  try {
+    // Search for job-related emails from the last 30 days
+    const query = encodeURIComponent('subject:(application OR interview OR offer OR unfortunately OR regret OR congratulations) newer_than:30d');
+    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=20`, {
+      headers: { Authorization: `Bearer ${googleToken}` }
+    });
+    const listData = await listRes.json();
+
+    if (!listData.messages || listData.messages.length === 0) {
+      status.textContent = 'No job-related emails found.';
+      return;
+    }
+
+    status.textContent = `Found ${listData.messages.length} emails — analysing...`;
+
+    // Fetch full content of each email
+    const emails = await Promise.all(listData.messages.map(async (m) => {
+      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
+        headers: { Authorization: `Bearer ${googleToken}` }
+      });
+      const msg = await msgRes.json();
+      const headers = msg.payload.headers;
+      return {
+        subject: headers.find(h => h.name === 'Subject')?.value || '',
+        from:    headers.find(h => h.name === 'From')?.value || '',
+        date:    headers.find(h => h.name === 'Date')?.value || ''
+      };
+    }));
+
+    await analyseEmails(emails);
+
+  } catch (err) {
+    status.textContent = 'Error fetching emails: ' + err.message;
+  }
+}
+
+async function analyseEmails(emails) {
+  const status = document.getElementById('sync-status');
+  const apiKey = document.getElementById('api-key-input').value.trim();
+
+  if (!apiKey) {
+    status.textContent = 'Please enter your Anthropic API key first.';
+    return;
+  }
+
+  const existingApps = apps.map(a => `${a.company} - ${a.role}`).join('\n');
+  const emailList = emails.map((e, i) => `${i+1}. From: ${e.from}\n   Subject: ${e.subject}\n   Date: ${e.date}`).join('\n\n');
+
+  const prompt = `You are analysing emails to update a job application tracker.
+
+Existing applications:
+${existingApps}
+
+Emails to analyse:
+${emailList}
+
+For each email, determine if it is job-application related. If it is, extract:
+- company: company name
+- status: one of "applied", "interviewing", "offer", "rejected"
+- date: ISO date string (YYYY-MM-DD)
+- matchesExisting: true if it matches an existing application, false if it's new
+
+Respond ONLY with a JSON array. If no emails are job-related, return [].
+Example: [{"company":"Atlassian","role":"Senior Designer","status":"rejected","date":"2026-05-01","matchesExisting":true}]`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    let raw = data.content[0].text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+    const results = JSON.parse(raw);
+
+    if (results.length === 0) {
+      status.textContent = 'No job-related emails found to process.';
+      return;
+    }
+
+    // Split into matches (auto-update) and new (flag for review)
+    const matches = results.filter(r => r.matchesExisting);
+    const newApps = results.filter(r => !r.matchesExisting);
+
+    // Auto-update matching applications
+    for (const r of matches) {
+      const idx = findApp(r.company);
+      if (idx > -1) {
+        const updated = { ...apps[idx], status: r.status };
+        await save(updated, 'update');
+      }
+    }
+
+    // Flag new ones for review
+    if (newApps.length > 0) {
+      showReviewPanel(newApps);
+    }
+
+    status.textContent = `Done! Updated ${matches.length} application${matches.length !== 1 ? 's' : ''}${newApps.length > 0 ? `, ${newApps.length} new to review` : ''}.`;
+
+  } catch (err) {
+    status.textContent = 'Analysis error: ' + err.message;
+  }
+}
+
+function showReviewPanel(items) {
+  const panel = document.getElementById('review-panel');
+  const container = document.getElementById('review-items');
+  panel.style.display = 'block';
+
+  container.innerHTML = items.map((item, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;font-size:13px;">
+        <strong>${esc(item.company)}</strong> — ${esc(item.role || 'Unknown role')}
+        <span class="badge badge-${item.status}" style="margin-left:8px;">${item.status}</span>
+      </div>
+      <button onclick="approveNewApp(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);cursor:pointer;">Add</button>
+      <button onclick="dismissNewApp(${i})" style="padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);cursor:pointer;">Dismiss</button>
+    </div>
+  `).join('');
+
+  // Store items for approval
+  window._pendingApps = items;
+}
+
+async function approveNewApp(i) {
+  const item = window._pendingApps[i];
+  const today = new Date().toISOString().split('T')[0];
+  await save({
+    company:  item.company,
+    role:     item.role || 'Unknown',
+    status:   item.status,
+    date:     item.date || today,
+    notes:    'Added via Gmail sync',
+    followup: null
+  }, 'add');
+
+  // Remove from review panel
+  window._pendingApps[i] = null;
+  const remaining = window._pendingApps.filter(Boolean);
+  if (remaining.length === 0) {
+    document.getElementById('review-panel').style.display = 'none';
+  } else {
+    showReviewPanel(remaining);
+  }
+}
+
+function dismissNewApp(i) {
+  window._pendingApps[i] = null;
+  const remaining = window._pendingApps.filter(Boolean);
+  if (remaining.length === 0) {
+    document.getElementById('review-panel').style.display = 'none';
+  } else {
+    showReviewPanel(remaining);
+  }
 }
 
   // ── Send a message ─────────────────────────────────────────────────────────
