@@ -629,18 +629,26 @@ async function fetchEmails() {
     status.textContent = `Found ${listData.messages.length} emails — analysing...`;
 
     // Fetch full content of each email
-    const emails = await Promise.all(listData.messages.map(async (m) => {
-      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
-        headers: { Authorization: `Bearer ${googleToken}` }
-      });
-      const msg = await msgRes.json();
-      const headers = msg.payload.headers;
-      return {
-        subject: headers.find(h => h.name === 'Subject')?.value || '',
-        from:    headers.find(h => h.name === 'From')?.value || '',
-        date:    headers.find(h => h.name === 'Date')?.value || ''
-      };
-    }));
+    const emailPromises = listData.messages.map(async (m) => {
+  try {
+    const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
+      headers: { Authorization: `Bearer ${googleToken}` }
+    });
+    const msg = await msgRes.json();
+    if (!msg.payload || !msg.payload.headers) return null;
+    const headers = msg.payload.headers;
+    return {
+      subject: headers.find(h => h.name === 'Subject')?.value || '',
+      from:    headers.find(h => h.name === 'From')?.value || '',
+      date:    headers.find(h => h.name === 'Date')?.value || ''
+    };
+  } catch (e) {
+    return null;
+  }
+});
+
+const emailResults = await Promise.all(emailPromises);
+const emails = emailResults.filter(Boolean); // remove any nulls
 
     await analyseEmails(emails);
 
