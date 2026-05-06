@@ -661,7 +661,7 @@ async function analyseEmails(emails) {
   const existingApps = apps.map(a => `${a.company} - ${a.role}`).join('\n');
   const emailList = emails.map((e, i) => `${i+1}. From: ${e.from}\n   Subject: ${e.subject}\n   Date: ${e.date}`).join('\n\n');
 
-  const prompt = `You are analysing emails to update a job application tracker.
+  const prompt = `You are analysing job application emails to update a tracker.
 
 Existing applications:
 ${existingApps}
@@ -671,12 +671,18 @@ ${emailList}
 
 For each email, determine if it is job-application related. If it is, extract:
 - company: company name
-- status: one of "applied", "interviewing", "offer", "rejected"
+- role: job title if mentioned
+- status: one of "applied", "interviewing", "offer", "rejected" based on these rules:
+  * "rejected": any of these phrases appear: "regret to inform", "not been selected", "unfortunately", "we won't be moving forward", "not successful", "not progressing", "other candidates", "not the right fit"
+  * "offer": any of these phrases appear: "offer of employment", "pleased to offer", "we would like to offer", "formal offer"
+  * "interviewing": any of these phrases appear: "invite you to interview", "schedule an interview", "next steps", "meet with the team", "phone screen", "video call"
+  * "applied": confirmation of application received, e.g. "thank you for applying", "we have received your application"
 - date: ISO date string (YYYY-MM-DD)
 - matchesExisting: true if it matches an existing application, false if it's new
 
-Respond ONLY with a JSON array. If no emails are job-related, return [].
-Example: [{"company":"Atlassian","role":"Senior Designer","status":"rejected","date":"2026-05-01","matchesExisting":true}]`;
+IMPORTANT: Rejection emails often start with "thank you for applying" before delivering bad news. Always read the full email — if rejection phrases are present, classify as "rejected" regardless of polite opening.
+
+Respond ONLY with a JSON array. If no emails are job-related, return [].`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
