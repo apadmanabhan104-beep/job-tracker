@@ -616,7 +616,7 @@ async function fetchEmails() {
   try {
     // Search for job-related emails from the last 30 days
     const query = encodeURIComponent('subject:(application OR interview OR offer OR unfortunately OR regret OR congratulations) newer_than:60d');
-    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=20`, {
+    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=200`, {
       headers: { Authorization: `Bearer ${googleToken}` }
     });
     const listData = await listRes.json();
