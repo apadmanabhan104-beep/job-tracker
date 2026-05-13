@@ -480,7 +480,7 @@ async function loadApps() {
       status:   STATUSES.includes(d.status) ? d.status : 'applied',
       date:     d.date     || today,
       notes:    d.notes    || '',
-      followup: d.followup || ''
+      followup: d.followup || null
     };
     await save(newApp, 'add');
 
